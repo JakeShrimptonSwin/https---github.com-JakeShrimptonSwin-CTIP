@@ -161,7 +161,7 @@ def extract_features(df):
 
     df['has_at_symbol'] = df['url'].str.contains('@', na=False).astype(int)
 
-    ip_df = df[df['has_at_symbol'] == 1]
+    #ip_df = df[df['has_at_symbol'] == 1]
     #type_counts = ip_df['label'].value_counts()
 
     # # NOTE Phishing is more likely to have an @, but not by much
@@ -195,7 +195,88 @@ def extract_features(df):
     # plot.xticks(rotation=0)
     # plot.show()
 
-    # --------------------Write new file--------------------
+    # --------------------Unusual Top level Domain--------------------
+    #This is a list of typically suspicious tlds
+    SUSPICIOUS_TLDS = {
+        'tk', 'ml', 'ga', 'cf', 'gq',   #Freenom's free TLDs
+        'xyz', 'top', 'club', 'info', 'work', 'click', 'link', 'loan',
+        'download', 'review', 'country', 'stream', 'bid', 'win',}
+    #create new collumn to house found tlds
+    def get_tld(url):
+        try:
+            if not url.startswith(('http://', 'https://')):
+                url = 'http://' + url
+            domain = urlparse(url).netloc
+    
+            # Strip a port number if present, e.g. 'example.com:8080' -> 'example.com'
+            domain = domain.split(':')[0]
+    
+            if '.' not in domain:
+                return ''
+    
+            return domain.rsplit('.', 1)[-1].lower()
+        except (ValueError, AttributeError):
+            return ''
+        
+    def is_suspicious_tld(tld):
+        return tld in SUSPICIOUS_TLDS
+    
+    df['tld'] = df['url'].apply(get_tld)
+    df['is_suspicious_tld'] = df['tld'].apply(is_suspicious_tld).astype(int)
+
+    #This shows tlds are often used in sus links
+    # suspicious_tld_df = df[df['is_suspicious_tld'] == 1]
+
+    # label_counts = suspicious_tld_df['label'].value_counts()
+
+    # plot.figure()
+    # label_counts.plot(kind='bar')
+    # plot.title('Label Breakdown for Suspicious-TLD URLs')
+    # plot.xlabel('Label (0 = benign, 1 = phishing)')
+    # plot.ylabel('Count')
+    # plot.xticks(rotation=0)
+    # plot.show()
+
+    # --------------------Suspiscious Keywords--------------------
+    #This is a list of sus keywords that may be used to trick people
+    SUSPICIOUS_KEYWORDS = [
+        'login', 'verify', 'secure', 'account', 'update', 'confirm', 'banking'
+    ]
+
+    df['has_suspicious_keyword'] = df['url'].str.contains('|'.join(SUSPICIOUS_KEYWORDS),case=False, na=False, regex=True).astype(int)
+
+    #Add count of suspicious keywords
+    df['suspicious_keyword_count'] = df['url'].str.count('|'.join(SUSPICIOUS_KEYWORDS), flags=re.IGNORECASE)
+
+    # --------------------non-Ascii Domain--------------------
+    #This checks for non ascii characters and returns 1 if there is a non ascii character
+    def has_non_ascii_domain(url):
+        try:
+            if not url.startswith(('http://', 'https://')):
+                url = 'http://' + url
+            domain = urlparse(url).netloc.split(':')[0]  # strip port if present
+
+            ascii_only = domain.encode('ascii', errors='ignore').decode('ascii')
+            return int(len(ascii_only) != len(domain))
+        except (ValueError, AttributeError):
+            return 0
+
+    df['has_non_ascii_domain'] = df['url'].apply(has_non_ascii_domain)
+
+    #small amount have this, but almost all detected are phishing
+    non_ascii_df = df[df['has_non_ascii_domain'] == 1]
+
+    label_counts = non_ascii_df['label'].value_counts()
+
+    plot.figure()
+    label_counts.plot(kind='bar')
+    plot.title('Label Breakdown for Non-ASCII Domain URLs')
+    plot.xlabel('Label (0 = benign, 1 = phishing)')
+    plot.ylabel('Count')
+    plot.xticks(rotation=0)
+    plot.show()
+    
+    ## --------------------Write new file--------------------
     print(df.head())
     df.to_csv('malicious_phish_updated.csv', index=False)
     return df
