@@ -3,14 +3,15 @@ import pandas
 
 def merge_datasets(df_1, df_2):
     df = pandas.concat([df_1, df_2], ignore_index=True)
+    df = clean_dataset_2(df)
     print(f'Final dataset size: {len(df)} rows')
-    
+
     return df
 
 def clean_dataset_2(df):
     ## --------------------data transformations--------------------
     #This is specific to the new dataset
-    # We want to remove all previous collumns as we want to use our own collumns
+    # We want to remove all existing features as we want to use our own feature extraction
     df = df[['url', 'label']]
     
     # remove rows with missing url values
