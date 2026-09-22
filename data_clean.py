@@ -3,6 +3,7 @@ import pandas
 
 def merge_datasets(df_1, df_2):
     df = pandas.concat([df_1, df_2], ignore_index=True)
+    print('Cleaning Merged Dataset:')
     df = clean_dataset_2(df)
     print(f'Final dataset size: {len(df)} rows')
 
