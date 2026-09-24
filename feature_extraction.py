@@ -106,7 +106,7 @@ def extract_features(df):
     df['has_multiple_https'] = df['url'].apply(has_multiple_https)
 # --------------------http subtstring count--------------------
     df['http_substring_count'] = df['url'].str.lower().str.count('http')
-    print(df.groupby('label')[['http_substring_count']].mean())
+    #print(df.groupby('label')[['http_substring_count']].mean())
 
 # --------------------Does the Url contain a onedrive link?--------------------
     #This is a more advanced check for other potential links to oneDrive 
