@@ -331,5 +331,5 @@ def extract_features(df):
     df['domain_url_ratio'] = df['domain_length'] / df['url_length'].replace(0, 1)
 ## --------------------Write new file--------------------
     print(df.head())
-    df.to_csv('malicious_phish_updated.csv', index=False)
+    df.to_csv('data/malicious_phish_updated.csv', index=False)
     return df
