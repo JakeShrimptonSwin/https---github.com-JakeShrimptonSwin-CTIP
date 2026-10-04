@@ -1,10 +1,6 @@
 import os
 import string
 import numpy as np
-import matplotlib
-matplotlib.use('Agg')  # file-only backend - we only savefig(), never show(), so skip
-                        # the Tkinter GUI backend entirely (avoids the "main thread is
-                        # not in main loop" errors from RandomForest's parallel workers)
 import matplotlib.pyplot as plot
 
 from sklearn.model_selection import train_test_split

@@ -1,7 +1,5 @@
 import os
 import numpy as np
-import matplotlib
-matplotlib.use('Agg')  # file-only backend - same fix as classification.py
 import matplotlib.pyplot as plot
 import seaborn as sns
 
@@ -17,8 +15,19 @@ OUT_DIR = "ml_outputs"
 # calculation would take hours. We score it on a random sample instead.
 SIL_SAMPLE_SIZE = 5000
 
+# Keep the PCA plot readable when the class contains many URLs.
+PCA_SAMPLE_SIZE = 10000
+URL_DISPLAY_LENGTH = 100
+
 # how many of the most-different features to report/plot per cluster
 TOP_N_FEATURES = 5
+
+
+def _shorten_url(url, max_length=URL_DISPLAY_LENGTH):
+    url = str(url)
+    if len(url) <= max_length:
+        return url
+    return f'{url[:max_length - 3]}...'
 
 
 def cluster(df, target_class=1):
@@ -29,8 +38,7 @@ def cluster(df, target_class=1):
 
     numeric_df = df.select_dtypes(include=[np.number])
     feature_cols = [c for c in numeric_df.columns if c != 'label']
-    print(f'Using {len(feature_cols)} features for clustering:')
-    print(feature_cols)
+    print(f'Using {len(feature_cols)} numeric features for clustering (excluding label).')
 
 # --------------------Filter to a single class--------------------
     # label is only used here to pick which rows to cluster - it is never
@@ -51,9 +59,9 @@ def cluster(df, target_class=1):
     # for transparency, then cap them below so they can't hijack the clustering.
     outlier_score_raw = np.linalg.norm(RobustScaler().fit_transform(X_cluster), axis=1)
     top_outliers = np.argsort(outlier_score_raw)[-3:][::-1]
-    print('Most extreme URLs in this class (excluded from clustering below, reported here):')
+    print('Most extreme URLs in this class (feature values are capped before clustering):')
     for idx in top_outliers:
-        print(f'  {urls_cluster.iloc[idx]}  (distance={outlier_score_raw[idx]:.1f})')
+        print(f'  {_shorten_url(urls_cluster.iloc[idx])}  (distance={outlier_score_raw[idx]:.1f})')
 
     # --- cap (winsorize) every feature at the 1st/99th percentile ---
     # This stops the handful of outliers above from single-handedly deciding
@@ -116,14 +124,42 @@ def cluster(df, target_class=1):
     # PC1/PC2 don't correspond to any single real feature.
     pca = PCA(n_components=2, random_state=RANDOM_STATE)
     coords = pca.fit_transform(X_scaled)
-    plot.figure(figsize=(7, 6))
-    sns.scatterplot(x=coords[:, 0], y=coords[:, 1], hue=cluster_labels, palette='tab10', s=15)
-    plot.title(f'Clusters within label={target_class} (PCA 2D view)')
-    plot.xlabel('PC1')
-    plot.ylabel('PC2')
-    plot.tight_layout()
-    os.makedirs(OUT_DIR, exist_ok=True)
-    plot.savefig(f'{OUT_DIR}/cluster_pca_scatter.png', dpi=150)
+    sample_size = min(PCA_SAMPLE_SIZE, len(coords))
+    rng = np.random.default_rng(RANDOM_STATE)
+    plot_indices = []
+    unique_clusters = np.unique(cluster_labels)
+    for cluster_id in unique_clusters:
+        cluster_indices = np.flatnonzero(cluster_labels == cluster_id)
+        cluster_sample_size = min(
+            len(cluster_indices),
+            max(1, round(sample_size * len(cluster_indices) / len(coords))),
+        )
+        plot_indices.extend(rng.choice(cluster_indices, size=cluster_sample_size, replace=False))
+
+    fig, ax = plot.subplots(figsize=(9, 7))
+    colors = sns.color_palette('colorblind', n_colors=len(unique_clusters))
+    for color, cluster_id in zip(colors, unique_clusters):
+        cluster_indices = np.flatnonzero(cluster_labels[plot_indices] == cluster_id)
+        sampled_indices = np.asarray(plot_indices)[cluster_indices]
+        ax.scatter(
+            coords[sampled_indices, 0],
+            coords[sampled_indices, 1],
+            color=color,
+            s=9,
+            alpha=0.45,
+            edgecolors='none',
+            rasterized=True,
+            label=f'Cluster {cluster_id} (n={np.count_nonzero(cluster_labels == cluster_id):,})',
+        )
+    ax.set_title(
+        f'Clusters within label={target_class} (PCA, showing {len(plot_indices):,} '
+        f'of {len(coords):,} URLs)'
+    )
+    ax.set_xlabel(f'PC1 ({pca.explained_variance_ratio_[0]:.1%} variance)')
+    ax.set_ylabel(f'PC2 ({pca.explained_variance_ratio_[1]:.1%} variance)')
+    ax.legend(title='Cluster', markerscale=1.5)
+    fig.tight_layout()
+    fig.savefig(f'{OUT_DIR}/cluster_pca_scatter.png', dpi=180)
     plot.close()
 
 # =====================================================================
@@ -131,38 +167,27 @@ def cluster(df, target_class=1):
 # Composition (how many rows) alone doesn't explain a cluster, so for each
 # one we compare its average feature values against the overall average
 # for this class, pull out what differs the most, and back it with real
-# example URLs. One profile chart is saved per cluster.
+# example URLs.
 # =====================================================================
     overall_mean = X_cluster.mean()
-    denom = overall_mean.replace(0, 1e-9).abs()
+    overall_std = X_cluster.std(ddof=0).replace(0, np.nan)
 
     print(f'\nCluster profiles (within label={target_class}):')
     for c in sorted(result_df['cluster'].unique()):
         sub = result_df[result_df['cluster'] == c]
         cluster_mean = sub[feature_cols].mean()
-        rel_diff = (cluster_mean - overall_mean) / denom
-        top_features = rel_diff.abs().sort_values(ascending=False).head(TOP_N_FEATURES)
+        standardized_diff = ((cluster_mean - overall_mean) / overall_std).fillna(0)
+        top_features = standardized_diff.abs().sort_values(ascending=False).head(TOP_N_FEATURES)
 
         print(f'\n--- Cluster {c} (n={len(sub)}, {len(sub)/len(result_df):.1%} of class) ---')
         for feat in top_features.index:
-            print(f'  {feat}: cluster={cluster_mean[feat]:.3f}  overall={overall_mean[feat]:.3f}  diff={rel_diff[feat]:+.1%}')
+            print(
+                f'  {feat}: {standardized_diff[feat]:+.2f} SD '
+                f'(cluster={cluster_mean[feat]:.3f}, class={overall_mean[feat]:.3f})'
+            )
         print('  Example URLs:')
         for u in sub['url'].sample(min(5, len(sub)), random_state=RANDOM_STATE):
-            print(f'    {u}')
+            print(f'    {_shorten_url(u)}')
 
-        # Bar chart of the same top-differing features, for the report -
-        # green = higher than the class average, red = lower.
-        diffs = rel_diff[top_features.index].sort_values()
-        colors = ['tab:red' if v < 0 else 'tab:green' for v in diffs]
-        plot.figure(figsize=(7, 4))
-        diffs.plot(kind='barh', color=colors)
-        plot.axvline(0, color='black', linewidth=0.8)
-        plot.title(f'Cluster {c} - how it differs from the class average')
-        plot.xlabel('Relative difference vs. overall average')
-        plot.tight_layout()
-        os.makedirs(OUT_DIR, exist_ok=True)
-        plot.savefig(f'{OUT_DIR}/cluster_{c}_profile.png', dpi=150)
-        plot.close()
-
-    print(f'\nPlots saved to ./{OUT_DIR}/')
+    print(f'\nClustering plots saved to ./{OUT_DIR}/')
     return result_df
