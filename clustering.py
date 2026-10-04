@@ -10,7 +10,7 @@ from sklearn.decomposition import PCA
 from sklearn.metrics import silhouette_score
 
 RANDOM_STATE = 42
-DATA_PATH = "malicious_phish_updated.csv"
+DATA_PATH = "data/malicious_phish_updated.csv"
 OUT_DIR = "ml_outputs"
 os.makedirs(OUT_DIR, exist_ok=True)
 
