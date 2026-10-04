@@ -6,6 +6,8 @@ import data_clean
 import feature_extraction
 import visualise_features
 import get_data
+import classification
+import clustering
 
 DATA_FOLDER = 'data'
 DATA_PATH = os.path.join(DATA_FOLDER, 'malicious_phish.csv')
@@ -74,7 +76,14 @@ def main():
             visualise_features.visualise(df_final)
 
 ## --------------------Train Models--------------------
-
+    run_step = input('Train and evaluate classification + clustering models? (y/n): ').strip().lower()
+ 
+    if run_step == 'y':
+        print('\n========== CLASSIFICATION ==========')
+        classification.classify(df_final)
+ 
+        print('\n========== CLUSTERING ==========')
+        clustering.cluster(df_final, target_class=1)
 ## --------------------Test Models--------------------
 
 ## --------------------Evaluate Models--------------------
