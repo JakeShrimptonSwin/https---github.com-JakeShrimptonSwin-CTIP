@@ -84,9 +84,7 @@ def main():
  
         print('\n========== CLUSTERING ==========')
         clustering.cluster(df_final, target_class=1)
-## --------------------Test Models--------------------
 
-## --------------------Evaluate Models--------------------
 
 
 

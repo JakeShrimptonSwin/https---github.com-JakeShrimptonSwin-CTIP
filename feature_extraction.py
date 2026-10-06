@@ -8,7 +8,7 @@ from collections import Counter
 from urllib.parse import urlparse
 import base64
 
-#NOTE - I removed all visualisations as i will create a new file that will handle all visualsations later.
+#NOTE - Visualisations have been moved to their own file.
 
 def extract_features(df):
 

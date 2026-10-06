@@ -1,6 +1,4 @@
-import pandas
 import matplotlib.pyplot as plot
-from sklearn.preprocessing import MinMaxScaler
 
 
 def visualise(df):
@@ -16,7 +14,7 @@ def visualise(df):
 
     correlations = df[numeric_cols].corrwith(df['label']).sort_values(key=abs, ascending=False)
 
-    print(correlations)
+    # print(correlations)
 
     plot.figure(figsize=(8, 10))
     correlations.sort_values().plot(kind='barh', color=['red' if c < 0 else 'green' for c in correlations.sort_values()])
